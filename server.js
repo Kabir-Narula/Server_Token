@@ -24,27 +24,33 @@ const jwtOptions = {
 passport.use(new JwtStrategy(jwtOptions, async (jwtPayload, done) => {
     try {
         const user = await userService.findUserById(jwtPayload._id);
-        if (user) {
-            return done(null, user);
-        }
-        return done(null, false);
+        return user ? done(null, user) : done(null, false);
     } catch (error) {
-        return done(error, false);
+        done(error, false);
     }
 }));
 
-// Registration endpoint
-app.post("/api/user/register", async (req, res) => {
-    try {
-        const hashedPassword = await bcrypt.hash(req.body.password, 10);
-        const user = await userService.registerUser({ ...req.body, password: hashedPassword });
-        res.status(201).json({ message: "User registered successfully", userId: user._id });
-    } catch (error) {
-        res.status(500).json({ message: "Error registering user", error: error.message });
-    }
-});
+// Registration endpoint with detailed error logging
+// app.post("/api/user/register", async (req, res) => {
+//     try {
+//         const hashedPassword = await bcrypt.hash(req.body.password, 10);
+//         const user = await userService.registerUser({ ...req.body, password: hashedPassword });
+//         res.status(201).json({ message: "User registered successfully", userId: user._id });
+//     } catch (error) {
+//         console.error("Error registering user", error.response ? error.response.data : error);
+//         res.status(500).json({ message: "Error registering user", detail: error.toString() });
+//     }
+// });
 
-// Login endpoint
+app.post("/api/user/register", (req, res) => {
+    userService
+      .registerUser(req.body)
+      .then((msg) => res.json({ message: msg }))
+      .catch((msg) => res.status(422).json({ message: msg }));
+  });
+  
+
+// Login endpoint with detailed error information
 app.post("/api/user/login", async (req, res) => {
     try {
         const user = await userService.checkUser(req.body.username);
@@ -56,7 +62,8 @@ app.post("/api/user/login", async (req, res) => {
             res.status(401).json({ message: "Login failed" });
         }
     } catch (error) {
-        res.status(500).json({ message: "Error logging in", error: error.message });
+        console.error("Error logging in", error.response ? error.response.data : error);
+        res.status(500).json({ message: "Error logging in", detail: error.toString() });
     }
 });
 
@@ -110,7 +117,6 @@ app.put("/api/user/history/:id", passport.authenticate('jwt', { session: false }
     }
 });
 
-// Remove an item from the user's history
 app.delete("/api/user/history/:id", passport.authenticate('jwt', { session: false }), async (req, res) => {
     try {
         await userService.removeHistory(req.user._id, req.params.id);
