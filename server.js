@@ -53,19 +53,31 @@ app.post("/api/user/register", (req, res) => {
 // Login endpoint with detailed error information
 app.post("/api/user/login", async (req, res) => {
     try {
-        const user = await userService.checkUser(req.body.username);
-        if (user && await bcrypt.compare(req.body.password, user.password)) {
-            const payload = { _id: user._id, userName: user.userName };
-            const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
-            res.json({ message: "Login successful", token: 'Bearer ' + token });
-        } else {
-            res.status(401).json({ message: "Login failed" });
-        }
+        // Extract userName and password from the request body
+        const { userName, password } = req.body;
+        
+        // Use the user service to authenticate the user
+        const user = await userService.checkUser({ userName, password });
+
+        // If authentication is successful, generate a JWT
+        const payload = { _id: user._id, userName: user.userName };
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
+
+        // Return the token as a Bearer token
+        res.json({ message: "Login successful", token: `Bearer ${token}` });
     } catch (error) {
-        console.error("Error logging in", error.response ? error.response.data : error);
-        res.status(500).json({ message: "Error logging in", detail: error.toString() });
+        // Handle errors during login
+        console.error("Error logging in:", error);
+        if (error.message.includes("Unable to find user")) {
+            res.status(401).json({ message: "Login failed: User not found" });
+        } else if (error.message.includes("Incorrect password")) {
+            res.status(401).json({ message: "Login failed: Incorrect password" });
+        } else {
+            res.status(500).json({ message: "Server error", detail: error.toString() });
+        }
     }
 });
+
 
 // Example of a secured route: Get user's favorites
 app.get("/api/user/favourites", passport.authenticate('jwt', { session: false }), async (req, res) => {
